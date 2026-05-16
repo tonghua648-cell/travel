@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Smart Travel｜城市旅行住宿与路线规划助手</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand-group">
+        <div class="brand">Smart Travel</div>
+        <div class="brand-divider"></div>
+        <div class="brand-subtitle">城市旅行住宿与路线规划助手</div>
+      </div>
+      <div class="status-group">
+        <span id="statusText" class="badge">未计算</span>
+        <span id="agentStatus" class="badge">Agent</span>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <section class="planning-bar">
+        <div class="input-panel agent-panel">
+          <div class="panel-title">
+            <span class="panel-icon">✧</span>
+            <span>Agent 输入区</span>
+          </div>
+          <div class="agent-compose">
+            <textarea
+              id="agentInput"
+              class="input-control agent-input"
+              placeholder="我想做武汉大学、华中农业大学的路线，只算公交，少走路。"
+            ></textarea>
+            <button id="agentBtn" class="btn-primary agent-submit" type="button">AI 生成方案</button>
+          </div>
+          <div id="agentOutput" class="agent-output"></div>
+        </div>
+
+        <div class="input-panel destination-panel">
+          <div class="panel-title">
+            <span class="panel-icon">⌖</span>
+            <span>目的地管理</span>
+          </div>
+          <div class="search-row">
+            <select id="provinceSelect" class="input-control" aria-label="选择省份"></select>
+            <select id="citySelect" class="input-control" aria-label="选择搜索城市"></select>
+            <input id="searchInput" class="input-control" type="search" placeholder="搜索并添加 POI 点..." />
+            <button id="searchBtn" class="btn-secondary" type="button">搜索</button>
+          </div>
+          <div id="searchResults" class="search-results"></div>
+          <div class="destination-head">
+            <span>已选目的地</span>
+            <span id="destinationCount" class="mini-badge">0</span>
+          </div>
+          <div id="destinations" class="destination-tags empty-state">暂无目的地</div>
+        </div>
+      </section>
+
+      <section class="control-strip">
+        <label class="field compact-field">
+          <span>路线方式 / 评分偏好</span>
+          <select id="routeModeSelect" class="input-control">
+            <option value="driving">驾车优先</option>
+            <option value="transit">公交优先</option>
+          </select>
+        </label>
+        <label class="field compact-field">
+          <span>&nbsp;</span>
+          <select id="preferenceSelect" class="input-control">
+            <option value="balanced">均衡模式</option>
+            <option value="time">时间优先</option>
+            <option value="comfort">舒适性优先</option>
+          </select>
+        </label>
+
+        <div class="field preference-field">
+          <span>偏好筛选</span>
+          <div class="preference-grid">
+            <label class="toggle-field">
+              <input id="lessWalkingInput" type="checkbox" />
+              <span>少步行</span>
+            </label>
+            <label class="toggle-field">
+              <input id="lessTransfersInput" type="checkbox" />
+              <span>少换乘</span>
+            </label>
+            <label class="toggle-field">
+              <input id="familyFriendlyInput" type="checkbox" />
+              <span>亲子友好</span>
+            </label>
+            <label class="toggle-field">
+              <input id="elderFriendlyInput" type="checkbox" />
+              <span>老人友好</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="weights-popover">
+          <div class="weights-title">评分权重</div>
+          <label class="range-field">
+            <span>平均时间 <b id="avgTimeWeightValue">50%</b></span>
+            <input id="avgTimeWeight" type="range" min="0" max="100" value="50" />
+          </label>
+          <label class="range-field">
+            <span>最长时间 <b id="maxTimeWeightValue">30%</b></span>
+            <input id="maxTimeWeight" type="range" min="0" max="100" value="30" />
+          </label>
+          <label class="range-field">
+            <span>舒适性 <sup class="help-mark" title="优先使用酒店真实评分折算；没有评分时根据酒店名称、类型、地址、电话等信息做轻量估算。">?</sup> <b id="comfortWeightValue">20%</b></span>
+            <input id="comfortWeight" type="range" min="0" max="100" value="20" />
+          </label>
+        </div>
+
+        <label class="field small-number">
+          <span>酒店数量</span>
+          <input id="hotelLimitInput" class="input-control" type="number" min="3" max="25" value="12" />
+        </label>
+        <label class="field time-field">
+          <span>出发时间</span>
+          <input id="startTimeInput" class="input-control" type="time" value="09:00" />
+        </label>
+        <label class="field small-number">
+          <span>预计停留时间</span>
+          <input id="stayMinutesInput" class="input-control" type="number" min="0" max="360" value="60" />
+        </label>
+        <label class="toggle-field return-toggle">
+          <input id="returnToHotelInput" type="checkbox" checked />
+          <span>返回酒店</span>
+        </label>
+        <button id="recommendBtn" class="btn-primary calculate-btn" type="button">开始计算推荐</button>
+      </section>
+
+      <section class="map-card">
+        <div id="map"></div>
+        <button id="mapMiniBtn" class="map-pin-btn" type="button" aria-pressed="false">小窗地图</button>
+        <div class="map-legend">
+          <span><i class="legend-dot destination-dot"></i>目的地</span>
+          <span><i class="legend-dot hotel-dot"></i>推荐酒店</span>
+          <span><i class="legend-line"></i>最佳路径</span>
+        </div>
+      </section>
+
+      <section class="results-section">
+        <div class="section-title-row">
+          <h2><span class="title-icon">▣</span> 分析推荐方案</h2>
+          <div class="result-actions">
+            <div class="scroll-controls" aria-label="推荐方案滚动控制">
+              <button id="recommendPrevBtn" class="scroll-btn" type="button" aria-label="向左查看推荐方案">‹</button>
+              <button id="recommendNextBtn" class="scroll-btn" type="button" aria-label="向右查看推荐方案">›</button>
+            </div>
+            <div class="share-row">
+              <button id="savePlanBtn" class="btn-secondary" type="button">保存方案</button>
+              <div id="shareOutput" class="share-output">已为您锁定最优住宿点</div>
+            </div>
+          </div>
+        </div>
+        <div id="recommendations" class="recommendation-grid"></div>
+        <div id="comparison" class="comparison-panel hidden"></div>
+      </section>
+
+      <section id="itineraryWorkspace" class="route-workspace hidden">
+        <div class="section-title-row">
+          <h2><span class="title-icon">◷</span> 当日游览路线</h2>
+        </div>
+        <div id="itineraryPanel" class="route-grid"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>© 2024 Smart Travel AI. All rights reserved.</span>
+      <span>隐私条款</span>
+      <span>开发者接口</span>
+      <button id="feedbackOpenBtn" class="footer-link" type="button">反馈意见</button>
+      <span class="system-status">● System Status: Operational</span>
+    </footer>
+
+    <div id="feedbackModal" class="feedback-modal hidden" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+      <div class="feedback-dialog">
+        <div class="feedback-head">
+          <div>
+            <div class="kicker">Feedback</div>
+            <h2 id="feedbackTitle">反馈意见</h2>
+          </div>
+          <button id="feedbackCloseBtn" class="modal-close" type="button" aria-label="关闭反馈弹窗">×</button>
+        </div>
+        <div class="feedback-body">
+          <label class="field">
+            <span>满意度评分</span>
+            <div id="feedbackRating" class="rating-group" role="radiogroup" aria-label="满意度评分">
+              <button class="rating-btn" type="button" data-rating="1">1</button>
+              <button class="rating-btn" type="button" data-rating="2">2</button>
+              <button class="rating-btn" type="button" data-rating="3">3</button>
+              <button class="rating-btn" type="button" data-rating="4">4</button>
+              <button class="rating-btn" type="button" data-rating="5">5</button>
+            </div>
+          </label>
+          <label class="field">
+            <span>反馈内容</span>
+            <textarea id="feedbackComment" class="input-control feedback-textarea" maxlength="2000" placeholder="请告诉我们哪里不好用，例如地点识别、路线规划、酒店推荐或界面交互。"></textarea>
+          </label>
+          <div id="feedbackMessage" class="feedback-message"></div>
+        </div>
+        <div class="feedback-actions">
+          <button id="feedbackCancelBtn" class="btn-secondary" type="button">取消</button>
+          <button id="feedbackSubmitBtn" class="btn-primary" type="button">提交反馈</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

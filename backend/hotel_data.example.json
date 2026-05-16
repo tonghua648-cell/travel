@@ -1,0 +1,12 @@
+{
+  "hotels": [
+    {
+      "id": "B0FFEXAMPLE",
+      "name": "示例酒店",
+      "rating": 4.6,
+      "price": 428,
+      "priceUnit": "元",
+      "source": "自有酒店数据"
+    }
+  ]
+}
